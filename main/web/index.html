@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ESP32 Monitor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: #38bdf8;
+      margin-bottom: 28px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+      width: 100%;
+      max-width: 900px;
+    }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      transition: border-color 0.2s;
+    }
+
+    .card:hover { border-color: #38bdf8; }
+
+    .card-icon  { font-size: 2rem; line-height: 1; }
+
+    .card-label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #94a3b8;
+    }
+
+    .card-value {
+      font-size: 2.4rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      line-height: 1;
+    }
+
+    .card-unit { font-size: 1rem; color: #64748b; margin-left: 4px; }
+
+    /* ── Obstacle card ── */
+    .obstacle-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      padding: 8px 20px;
+      border-radius: 999px;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .obstacle-badge.clear    { background: #064e3b; color: #34d399; }
+    .obstacle-badge.detected { background: #7f1d1d; color: #f87171; }
+
+    .obstacle-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .obstacle-badge.detected .obstacle-dot {
+      animation: blink 0.8s step-start infinite;
+    }
+
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* ── Relay card ── */
+    .card.switch-card { gap: 16px; }
+
+    .switch-label-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .switch-name { font-size: 0.95rem; font-weight: 600; color: #cbd5e1; }
+
+    .toggle { position: relative; width: 52px; height: 28px; cursor: pointer; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      background: #334155;
+      border-radius: 999px;
+      transition: background 0.25s;
+    }
+
+    .toggle-thumb {
+      position: absolute;
+      top: 4px; left: 4px;
+      width: 20px; height: 20px;
+      background: #94a3b8;
+      border-radius: 50%;
+      transition: transform 0.25s, background 0.25s;
+    }
+
+    .toggle input:checked ~ .toggle-track { background: #0ea5e9; }
+    .toggle input:checked ~ .toggle-thumb { transform: translateX(24px); background: #fff; }
+
+    .switch-status           { font-size: 0.78rem; color: #64748b; }
+    .switch-status.on        { color: #34d399; }
+    .switch-status.off       { color: #f87171; }
+
+    .footer { margin-top: 28px; font-size: 0.75rem; color: #475569; }
+  </style>
+</head>
+<body>
+
+  <h1>Smart Home Monitor</h1>
+
+  <div class="grid">
+
+    <!-- Temperature -->
+    <div class="card">
+      <span class="card-icon">🌡️</span>
+      <span class="card-label">Temperature</span>
+      <div>
+        <span class="card-value" id="temperature">--</span>
+        <span class="card-unit">°C</span>
+      </div>
+    </div>
+
+    <!-- Humidity -->
+    <div class="card">
+      <span class="card-icon">💧</span>
+      <span class="card-label">Humidity</span>
+      <div>
+        <span class="card-value" id="humidity">--</span>
+        <span class="card-unit">%</span>
+      </div>
+    </div>
+
+    <!-- Door Sensor -->
+    <div class="card">
+      <span class="card-icon" id="door-icon">🚪</span>
+      <span class="card-label">Door Sensor</span>
+      <span class="obstacle-badge clear" id="door-badge">
+        <span class="obstacle-dot"></span>
+        <span id="door-text">Closed</span>
+      </span>
+    </div>
+
+    <!-- Light Sensor -->
+    <div class="card">
+      <span class="card-icon" id="light-sensor-icon">☀️</span>
+      <span class="card-label">Light Sensor</span>
+      <div>
+        <span class="card-value" id="lux-value">--</span>
+        <span class="card-unit">%</span>
+      </div>
+      <span class="obstacle-badge clear" id="bright-badge">
+        <span class="obstacle-dot"></span>
+        <span id="bright-text">Bright</span>
+      </span>
+      <span class="card-unit" style="font-size:0.75rem">raw: <span id="lux-raw">--</span></span>
+    </div>
+
+    <!-- Motion Sensor -->
+    <div class="card">
+      <span class="card-icon" id="motion-icon">🚶</span>
+      <span class="card-label">Motion Sensor</span>
+      <span class="obstacle-badge clear" id="motion-badge">
+        <span class="obstacle-dot"></span>
+        <span id="motion-text">Clear</span>
+      </span>
+    </div>
+
+    <!-- Light Switch -->
+    <div class="card switch-card">
+      <span class="card-icon" id="light-icon">💡</span>
+      <span class="card-label">Light Switch</span>
+      <div class="switch-label-row">
+        <span class="switch-name">Living Room</span>
+        <label class="toggle">
+          <input type="checkbox" id="relay1-toggle" onchange="setRelay(1, this.checked)" />
+          <span class="toggle-track"></span>
+          <span class="toggle-thumb"></span>
+        </label>
+      </div>
+      <span class="switch-status off" id="relay1-status">Off</span>
+    </div>
+
+  </div>
+
+  <div class="footer" id="last-update">Last updated: --</div>
+
+  <script>
+    function fetchSensors() {
+      fetch('/api/sensors')
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('temperature').textContent =
+            data.temperature !== undefined ? data.temperature.toFixed(1) : '--';
+          document.getElementById('humidity').textContent =
+            data.humidity !== undefined ? data.humidity.toFixed(1) : '--';
+
+          /* Door sensor: door=1 → closed (safe), door=0 → open (alert) */
+          const badge  = document.getElementById('door-badge');
+          const text   = document.getElementById('door-text');
+          const icon   = document.getElementById('door-icon');
+          const closed = data.door === 1;
+          badge.className  = 'obstacle-badge ' + (closed ? 'clear' : 'detected');
+          text.textContent = closed ? 'Closed' : 'Open';
+          icon.textContent = closed ? '🚪' : '🔓';
+
+          /* Light sensor */
+          if (data.lux !== undefined) {
+            document.getElementById('lux-value').textContent = data.lux;
+            document.getElementById('lux-raw').textContent = data.lux_raw;
+            const bright = data.bright === 1;
+            const bb = document.getElementById('bright-badge');
+            bb.className = 'obstacle-badge ' + (bright ? 'clear' : 'detected');
+            document.getElementById('bright-text').textContent = bright ? 'Bright' : 'Dark';
+            document.getElementById('light-sensor-icon').textContent = bright ? '☀️' : '🌑';
+          }
+
+          /* Motion sensor: motion=1 → detected (alert), motion=0 → clear */
+          const mBadge   = document.getElementById('motion-badge');
+          const mText    = document.getElementById('motion-text');
+          const mIcon    = document.getElementById('motion-icon');
+          const motion   = data.motion === 1;
+          mBadge.className  = 'obstacle-badge ' + (motion ? 'detected' : 'clear');
+          mText.textContent = motion ? 'Detected' : 'Clear';
+          mIcon.textContent = motion ? '🚨' : '🚶';
+
+          /* Only update the icon from actual light state (auto or manual) */
+          if (data.light !== undefined) {
+            document.getElementById('light-icon').textContent = data.light === 1 ? '💡' : '🌑';
+          }
+
+          document.getElementById('last-update').textContent =
+            'Last updated: ' + new Date().toLocaleTimeString();
+        })
+        .catch(() => {});
+    }
+
+    function setRelay(relay_id, state) {
+      const statusEl = document.getElementById('relay' + relay_id + '-status');
+      fetch('/api/relay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: relay_id, state: state ? 1 : 0 })
+      })
+        .then(r => r.json())
+        .then(data => {
+          const on = data.state === 1;
+          statusEl.textContent = on ? 'On' : 'Off';
+          statusEl.className   = 'switch-status ' + (on ? 'on' : 'off');
+          document.getElementById('relay' + relay_id + '-toggle').checked = on;
+          document.getElementById('light-icon').textContent = on ? '💡' : '🌑';
+        })
+        .catch(() => {
+          document.getElementById('relay' + relay_id + '-toggle').checked = !state;
+        });
+    }
+
+    fetchSensors();
+    setInterval(fetchSensors, 2000);
+  </script>
+
+</body>
+</html>

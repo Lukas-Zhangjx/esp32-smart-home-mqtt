@@ -1,0 +1,31 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "../wifi/wifi_sta.c"
+        "../http/http_server.c"
+        "../sensor/dht11.c"
+        "../sensor/obstacle.c"
+        "../sensor/ir_sensor.c"
+        "../sensor/light_sensor.c"
+        "../gpio/led.c"
+        "../gpio/relay.c"
+        "../logic/light_ctrl.c"
+    INCLUDE_DIRS
+        "."
+        "../wifi"
+        "../http"
+        "../sensor"
+        "../gpio"
+        "../logic"
+    EMBED_FILES
+        "web/index.html"
+    REQUIRES
+        nvs_flash
+        esp_netif
+        esp_wifi
+        esp_event
+        esp_http_server
+        esp_driver_gpio
+        esp_timer
+        esp_adc
+)
