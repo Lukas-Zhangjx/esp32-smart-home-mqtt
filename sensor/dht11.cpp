@@ -21,7 +21,7 @@
  *    [ 7: 0] checksum = lower 8 bits of the sum of the first four bytes
  */
 
-#include <string.h>
+#include <cstring>
 #include "dht11.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"

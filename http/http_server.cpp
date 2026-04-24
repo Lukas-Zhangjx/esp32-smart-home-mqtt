@@ -10,7 +10,7 @@
  * will be replaced once the GPIO driver is complete.
  */
 
-#include <string.h>
+#include <cstring>
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_http_server.h"
