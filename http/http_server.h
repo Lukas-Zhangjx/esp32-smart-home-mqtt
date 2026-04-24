@@ -22,6 +22,7 @@ extern "C" {
 #endif
 
 #include "esp_err.h"
+#include "dht11.h"
 
 /**
  * @brief  Start the HTTP server and register all URI handlers
@@ -39,13 +40,16 @@ esp_err_t http_server_start(void);
 void http_server_stop(void);
 
 /**
- * @brief  Read DHT11 and update the sensor cache
+ * @brief  Update the sensor cache with a pre-read DHT11 result.
  *
- * Should be called at least once every 2 seconds from sensor_task
- * (limited by the DHT11 sampling period).
- * HTTP handlers read directly from the cache without blocking request processing.
+ * sensor_task calls dht11_read() once and passes the result here so the same
+ * data can also be forwarded to MQTT without triggering a second read.
+ * A zero-value result (failed read) is silently ignored — the last good cache
+ * value is retained.
+ *
+ * @param data  DHT11 data struct from the caller.
  */
-void http_server_update_sensor(void);
+void http_server_update_sensor(dht11_data_t data);
 
 /**
  * @brief  Update the obstacle detection state cache (door/window sensor)

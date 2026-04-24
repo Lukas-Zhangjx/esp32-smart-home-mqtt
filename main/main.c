@@ -13,6 +13,7 @@
 #include "ir_sensor.h"
 #include "light_sensor.h"
 #include "esp_adc/adc_oneshot.h"
+#include "mqtt_manager.h"
 
 static const char *TAG = "main";
 
@@ -84,14 +85,24 @@ static void sensor_task(void *pvParameters)
 
     /* --- main loop --- */
     while (1) {
-        /* DHT11 temperature and humidity */
-        http_server_update_sensor();
+        /* Read DHT11 once; forward to both HTTP cache and MQTT */
+        dht11_data_t dht = {0};
+        dht11_read(&dht);
+        http_server_update_sensor(dht);
 
         /* Light sensor: analog + digital */
         int raw     = light_sensor_analog();
         int percent = light_sensor_to_percent(raw);
         int bright  = light_sensor_digital();
         http_server_update_light(percent, raw, bright);
+
+        /* Publish all sensor values over MQTT (no-op when not connected) */
+        mqtt_manager_publish_sensors(
+            dht.temperature, dht.humidity,
+            /* motion and door states come from the io_task caches via http_server;
+             * read them back via light_ctrl for relay state */
+            0, 0,  /* TODO: expose ir/obstacle state from io_task */
+            percent, light_ctrl_get_state());
 
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
@@ -105,12 +116,17 @@ static void sensor_task(void *pvParameters)
  * ================================================================ */
 static void network_task(void *pvParameters)
 {
-    /* --- module initialization --- */
+    /* Start HTTP server */
     if (http_server_start() != ESP_OK) {
         ESP_LOGE(TAG, "http server failed to start");
     }
 
-    /* HTTP Server is driven internally by esp_http_server; this task needs no main loop */
+    /* Start MQTT client (connects to broker asynchronously) */
+    if (mqtt_manager_init(NULL) != ESP_OK) {
+        ESP_LOGE(TAG, "mqtt manager failed to start");
+    }
+
+    /* Both services run on their own internal tasks; nothing left to do here */
     vTaskDelete(NULL);
 }
 

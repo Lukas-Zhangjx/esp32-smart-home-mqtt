@@ -10,6 +10,7 @@ idf_component_register(
         "../gpio/led.cpp"
         "../gpio/relay.cpp"
         "../logic/light_ctrl.cpp"
+        "../mqtt/mqtt_manager.cpp"
     INCLUDE_DIRS
         "."
         "../wifi"
@@ -17,6 +18,7 @@ idf_component_register(
         "../sensor"
         "../gpio"
         "../logic"
+        "../mqtt"
     EMBED_FILES
         "web/index.html"
     REQUIRES
@@ -28,4 +30,5 @@ idf_component_register(
         esp_driver_gpio
         esp_timer
         esp_adc
+        mqtt
 )

@@ -14,8 +14,7 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_http_server.h"
-#include "http_server.h"
-#include "dht11.h"
+#include "http_server.h"   /* includes dht11.h for dht11_data_t */
 #include "light_ctrl.h"
 
 static const char *TAG = "http_server";
@@ -57,18 +56,18 @@ static int s_light_raw     = 0;
 static int s_light_digital = 0;
 
 /**
- * @brief  Update the sensor cache; should be called periodically from main_task
- *         (recommended interval >= 2 s).
- *
- * On read failure the previous valid data is retained — the cache is not cleared.
+ * @brief  Update the sensor cache with pre-read DHT11 data.
+ *         sensor_task reads DHT11 once and passes the result here,
+ *         so the same data can also be forwarded to MQTT without a second read.
+ * @param  data  DHT11 reading from the caller; ignored if temperature == 0 and
+ *               humidity == 0 (indicates a failed read — retain last good cache).
  */
-void http_server_update_sensor(void)
+void http_server_update_sensor(dht11_data_t data)
 {
-    dht11_data_t data;
-    esp_err_t ret = dht11_read(&data);
-    if (ret == ESP_OK) {
-        s_sensor_cache = data; /* update cache */
-    } /* on read failure retain the last cache; no log printed (DHT11 module pending replacement) */
+    /* Only update the cache when the read actually succeeded (non-zero values) */
+    if (data.temperature != 0.0f || data.humidity != 0.0f) {
+        s_sensor_cache = data;
+    } /* on read failure retain the last cache value */
 }
 
 void http_server_update_obstacle(int detected)
