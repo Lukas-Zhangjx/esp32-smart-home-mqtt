@@ -14,6 +14,10 @@
 #ifndef LIGHT_CTRL_H
 #define LIGHT_CTRL_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief  Initialize the light control module; light off by default
  */
@@ -54,5 +58,9 @@ void light_ctrl_tick(void);
  * @return 1 = on, 0 = off
  */
 int light_ctrl_get_state(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* LIGHT_CTRL_H */

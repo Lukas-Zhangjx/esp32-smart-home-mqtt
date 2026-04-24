@@ -9,6 +9,10 @@
 #ifndef LED_H
 #define LED_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "esp_err.h"
 #include "driver/gpio.h"
 
@@ -41,5 +45,9 @@ void led_toggle(void);
  * @return 1 = on, 0 = off
  */
 int led_get_state(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* LED_H */

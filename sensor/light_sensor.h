@@ -13,6 +13,10 @@
 #ifndef LIGHT_SENSOR_H
 #define LIGHT_SENSOR_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "esp_err.h"
 #include "driver/gpio.h"
 #include "esp_adc/adc_oneshot.h"
@@ -48,5 +52,9 @@ int light_sensor_analog(void);
  * @return     0-100; higher value means brighter
  */
 int light_sensor_to_percent(int raw);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* LIGHT_SENSOR_H */

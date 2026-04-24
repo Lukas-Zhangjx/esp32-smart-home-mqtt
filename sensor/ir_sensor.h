@@ -11,6 +11,10 @@
 #ifndef IR_SENSOR_H
 #define IR_SENSOR_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "esp_err.h"
 #include "driver/gpio.h"
 
@@ -28,5 +32,9 @@ esp_err_t ir_sensor_init(gpio_num_t gpio_num);
  * @return 1 = target detected, 0 = no target
  */
 int ir_sensor_detected(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* IR_SENSOR_H */

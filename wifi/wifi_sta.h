@@ -1,6 +1,9 @@
 #ifndef WIFI_STA_H
 #define WIFI_STA_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <string.h>
 #include "freertos/FreeRTOS.h"
@@ -18,4 +21,9 @@
 
 
 extern void wifi_station_startup();
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

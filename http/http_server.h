@@ -17,6 +17,10 @@
 #ifndef HTTP_SERVER_H
 #define HTTP_SERVER_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "esp_err.h"
 
 /**
@@ -69,5 +73,9 @@ void http_server_update_ir(int detected);
  * @param digital  1 = bright, 0 = dark
  */
 void http_server_update_light(int percent, int raw, int digital);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* HTTP_SERVER_H */

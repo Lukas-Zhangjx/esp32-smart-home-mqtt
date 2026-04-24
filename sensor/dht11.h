@@ -14,6 +14,10 @@
 #ifndef DHT11_H
 #define DHT11_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "esp_err.h"
 #include "driver/gpio.h"
 
@@ -45,5 +49,9 @@ esp_err_t dht11_init(gpio_num_t gpio_num);
  * @return ESP_ERR_INVALID_CRC  checksum error (data corrupted)
  */
 esp_err_t dht11_read(dht11_data_t *data);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* DHT11_H */

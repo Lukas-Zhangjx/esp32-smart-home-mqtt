@@ -10,6 +10,10 @@
 #ifndef RELAY_H
 #define RELAY_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "esp_err.h"
 #include "driver/gpio.h"
 
@@ -35,5 +39,9 @@ int relay_set(int state);
  * @return 1 = on (conducting), 0 = off (open)
  */
 int relay_get_state(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* RELAY_H */
