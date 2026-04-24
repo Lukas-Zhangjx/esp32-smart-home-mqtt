@@ -111,20 +111,19 @@ void wifi_init_sta(void)
                                                         NULL,
                                                         &instance_got_ip));
 //wifi information config
+    /* C++ does not support nested designated initializers (.threshold.authmode),
+     * so authmode threshold is assigned separately after zero-initialization. */
     wifi_config_t wifi_config = {
         .sta = {
-            .ssid = EXAMPLE_ESP_WIFI_SSID,
+            .ssid     = EXAMPLE_ESP_WIFI_SSID,
             .password = EXAMPLE_ESP_WIFI_PASS,
-            /* Authmode threshold resets to WPA2 as default if password matches WPA2 standards (password len => 8).
-             * If you want to connect the device to deprecated WEP/WPA networks, Please set the threshold value
-             * to WIFI_AUTH_WEP/WIFI_AUTH_WPA_PSK and set the password with length and format matching to
-             * WIFI_AUTH_WEP/WIFI_AUTH_WPA_PSK standards.
-             */
-            .threshold.authmode = ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD,
-            .sae_pwe_h2e = ESP_WIFI_SAE_MODE,
+            .sae_pwe_h2e        = ESP_WIFI_SAE_MODE,
             .sae_h2e_identifier = EXAMPLE_H2E_IDENTIFIER,
         },
     };
+    /* Authmode threshold resets to WPA2 as default if password matches WPA2 standards (len >= 8).
+     * For deprecated WEP/WPA networks, set ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD accordingly. */
+    wifi_config.sta.threshold.authmode = ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD;
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
     ESP_ERROR_CHECK(esp_wifi_start() );
@@ -160,7 +159,7 @@ void wifi_station_startup()
     if (CONFIG_LOG_MAXIMUM_LEVEL > CONFIG_LOG_DEFAULT_LEVEL) {
         /* If you only want to open more logs in the wifi module, you need to make the max level greater than the default level,
          * and call esp_log_level_set() before esp_wifi_init() to improve the log level of the wifi module. */
-        esp_log_level_set("wifi", CONFIG_LOG_MAXIMUM_LEVEL);
+        esp_log_level_set("wifi", static_cast<esp_log_level_t>(CONFIG_LOG_MAXIMUM_LEVEL));
     }
 
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");

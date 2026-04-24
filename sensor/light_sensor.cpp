@@ -52,8 +52,8 @@ esp_err_t light_sensor_init(gpio_num_t digital_gpio, adc_channel_t adc_channel)
 
     /* ── Channel configuration: 12-bit, 11 dB attenuation (range 0~3.9 V) ── */
     adc_oneshot_chan_cfg_t chan_cfg = {
+        .atten    = ADC_ATTEN_DB_12,
         .bitwidth = ADC_BITWIDTH_12,
-        .atten    = ADC_ATTEN_DB_11,
     };
     ret = adc_oneshot_config_channel(s_adc_handle, adc_channel, &chan_cfg);
     if (ret != ESP_OK) {
