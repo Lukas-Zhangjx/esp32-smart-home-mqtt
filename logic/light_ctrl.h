@@ -41,9 +41,10 @@ public:
     void set_manual(int on);
 
     /**
-     * @brief  Call every io_task loop (~100 ms) to check the auto-off countdown.
+     * @brief  Periodic run function — call from the 100 ms task.
+     *         Checks the auto-off countdown timer.
      */
-    void tick();
+    void run();
 
     /** @brief  Return actual relay state: 1 = on, 0 = off. */
     int get_state() const;
@@ -66,7 +67,7 @@ void light_ctrl_init(void);
 void light_ctrl_on_motion(void);
 void light_ctrl_on_idle(void);
 void light_ctrl_set_manual(int on);
-void light_ctrl_tick(void);
+void light_ctrl_run(void);
 int  light_ctrl_get_state(void);
 
 #ifdef __cplusplus

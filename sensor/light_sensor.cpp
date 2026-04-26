@@ -7,6 +7,7 @@
  */
 
 #include "light_sensor.h"
+#include "sensor_state.h"
 #include "esp_log.h"
 
 static const char *TAG = "light_sensor";
@@ -90,6 +91,15 @@ int LightSensor::analog() const
     return percent;
 }
 
+void LightSensor::run()
+{
+    int raw     = analog();
+    int percent = to_percent(raw);
+    int bright  = digital();
+    ESP_LOGI(TAG, "lux=%d bright=%d", percent, bright);
+    sensor_state_set_lux(percent);
+}
+
 } /* namespace sensor */
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -103,6 +113,7 @@ esp_err_t light_sensor_init(gpio_num_t digital_gpio, adc_channel_t adc_channel)
     return s_light.init(digital_gpio, adc_channel);
 }
 
-int light_sensor_digital(void)        { return s_light.digital(); }
-int light_sensor_analog(void)         { return s_light.analog(); }
-int light_sensor_to_percent(int raw)  { return sensor::LightSensor::to_percent(raw); }
+int  light_sensor_digital(void)        { return s_light.digital(); }
+int  light_sensor_analog(void)         { return s_light.analog(); }
+int  light_sensor_to_percent(int raw)  { return sensor::LightSensor::to_percent(raw); }
+void light_sensor_run(void)            { s_light.run(); }

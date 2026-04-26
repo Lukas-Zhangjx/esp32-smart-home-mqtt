@@ -93,7 +93,7 @@ void LightCtrl::set_manual(int on)
     }
 }
 
-void LightCtrl::tick()
+void LightCtrl::run()
 {
     /* Nothing to do if manually always on or auto mode is not running */
     if (m_manual_on || !m_auto_active) return;
@@ -123,5 +123,5 @@ void light_ctrl_init(void)           { s_ctrl.init(); }
 void light_ctrl_on_motion(void)      { s_ctrl.on_motion(); }
 void light_ctrl_on_idle(void)        { s_ctrl.on_idle(); }
 void light_ctrl_set_manual(int on)   { s_ctrl.set_manual(on); }
-void light_ctrl_tick(void)           { s_ctrl.tick(); }
+void light_ctrl_run(void)            { s_ctrl.run(); }
 int  light_ctrl_get_state(void)      { return s_ctrl.get_state(); }

@@ -49,6 +49,12 @@ public:
      */
     esp_err_t read(dht11_data_t *data);
 
+    /**
+     * @brief  Periodic run function — call from the 2000 ms task.
+     *         Reads the sensor and updates sensor_state temperature and humidity.
+     */
+    void run();
+
 private:
     gpio_num_t m_gpio;
 
@@ -68,6 +74,7 @@ extern "C" {
 
 esp_err_t dht11_init(gpio_num_t gpio_num);
 esp_err_t dht11_read(dht11_data_t *data);
+void      dht11_run(void);
 
 #ifdef __cplusplus
 } /* extern "C" */

@@ -20,7 +20,7 @@ namespace sensor {
 
 class IrSensor {
 public:
-    IrSensor() : m_gpio(GPIO_NUM_NC) {}
+    IrSensor() : m_gpio(GPIO_NUM_NC), m_last(-1) {}
 
     /**
      * @brief  Configure the GPIO as floating input (HC-SR501 drives the line actively).
@@ -34,8 +34,17 @@ public:
      */
     int detected() const;
 
+    /**
+     * @brief  Periodic run function — call from the 100 ms task.
+     *         Reads the sensor; on state change logs and updates sensor_state motion.
+     *         Notifies light_ctrl on every call (resets the auto-off timer while motion
+     *         is continuously detected).
+     */
+    void run();
+
 private:
     gpio_num_t m_gpio;
+    int        m_last;  /* previous reading; -1 = not yet sampled */
 };
 
 } /* namespace sensor */
@@ -47,6 +56,7 @@ extern "C" {
 
 esp_err_t ir_sensor_init(gpio_num_t gpio_num);
 int       ir_sensor_detected(void);
+void      ir_sensor_run(void);
 
 #ifdef __cplusplus
 } /* extern "C" */

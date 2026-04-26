@@ -54,6 +54,12 @@ public:
      */
     static int to_percent(int raw);
 
+    /**
+     * @brief  Periodic run function — call from the 2000 ms task.
+     *         Reads analog and digital outputs; updates sensor_state lux.
+     */
+    void run();
+
 private:
     gpio_num_t               m_digital_gpio;
     adc_oneshot_unit_handle_t m_adc_handle;
@@ -71,6 +77,7 @@ esp_err_t light_sensor_init(gpio_num_t digital_gpio, adc_channel_t adc_channel);
 int       light_sensor_digital(void);
 int       light_sensor_analog(void);
 int       light_sensor_to_percent(int raw);
+void      light_sensor_run(void);
 
 #ifdef __cplusplus
 } /* extern "C" */

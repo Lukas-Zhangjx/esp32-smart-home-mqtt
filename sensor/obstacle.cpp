@@ -8,6 +8,7 @@
  */
 
 #include "obstacle.h"
+#include "sensor_state.h"
 #include "esp_log.h"
 
 static const char *TAG = "obstacle";
@@ -46,6 +47,16 @@ int ObstacleSensor::detected() const
     return gpio_get_level(m_gpio) == 0 ? 1 : 0;
 }
 
+void ObstacleSensor::run()
+{
+    int current = detected();
+    if (current != m_last) {
+        ESP_LOGI(TAG, "door: %s", current ? "CLOSED" : "OPEN");
+        sensor_state_set_door(current);
+        m_last = current;
+    }
+}
+
 } /* namespace sensor */
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -56,3 +67,4 @@ static sensor::ObstacleSensor s_obstacle;
 
 esp_err_t obstacle_init(gpio_num_t gpio_num) { return s_obstacle.init(gpio_num); }
 int       obstacle_detected(void)            { return s_obstacle.detected(); }
+void      obstacle_run(void)                 { s_obstacle.run(); }

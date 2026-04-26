@@ -7,6 +7,8 @@
  */
 
 #include "ir_sensor.h"
+#include "sensor_state.h"
+#include "light_ctrl.h"
 #include "esp_log.h"
 
 static const char *TAG = "ir_sensor";
@@ -45,6 +47,26 @@ int IrSensor::detected() const
     return gpio_get_level(m_gpio);
 }
 
+void IrSensor::run()
+{
+    int current = detected();
+
+    /* Log and update sensor_state only on state change */
+    if (current != m_last) {
+        ESP_LOGI(TAG, "ir: %s", current ? "DETECTED" : "clear");
+        sensor_state_set_motion(current);
+        m_last = current;
+    }
+
+    /* Notify light_ctrl on every run so the auto-off timer keeps resetting
+     * while motion is continuously detected */
+    if (current) {
+        light_ctrl_on_motion();
+    } else {
+        light_ctrl_on_idle();
+    }
+}
+
 } /* namespace sensor */
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -55,3 +77,4 @@ static sensor::IrSensor s_ir;
 
 esp_err_t ir_sensor_init(gpio_num_t gpio_num) { return s_ir.init(gpio_num); }
 int       ir_sensor_detected(void)            { return s_ir.detected(); }
+void      ir_sensor_run(void)                 { s_ir.run(); }

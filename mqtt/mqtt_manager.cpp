@@ -13,6 +13,8 @@
 
 #include "mqtt_manager.h"
 #include "light_ctrl.h"
+#include "sensor_state.h"
+#include "relay.h"
 #include "esp_log.h"
 #include "esp_crt_bundle.h"
 #include <cstdio>
@@ -194,6 +196,20 @@ void Manager::on_event(esp_mqtt_event_handle_t event)
     }
 }
 
+void Manager::run()
+{
+    if (!is_connected()) {
+        return;
+    }
+    publish_sensors(
+        sensor_state_get_temperature(),
+        sensor_state_get_humidity(),
+        sensor_state_get_motion(),
+        sensor_state_get_door(),
+        sensor_state_get_lux(),
+        relay_get_state());
+}
+
 } /* namespace mqtt */
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -225,4 +241,11 @@ void mqtt_manager_publish_sensors(float temp, float hum,
 bool mqtt_manager_is_connected(void)
 {
     return s_manager && s_manager->is_connected();
+}
+
+void mqtt_manager_run(void)
+{
+    if (s_manager) {
+        s_manager->run();
+    }
 }

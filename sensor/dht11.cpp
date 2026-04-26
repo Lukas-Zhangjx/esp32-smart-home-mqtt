@@ -23,6 +23,7 @@
 
 #include <cstring>
 #include "dht11.h"
+#include "sensor_state.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -166,6 +167,17 @@ esp_err_t DhtSensor::read(dht11_data_t *data)
     return ESP_OK;
 }
 
+void DhtSensor::run()
+{
+    dht11_data_t data = {};
+    esp_err_t ret = read(&data);
+    if (ret == ESP_OK) {
+        sensor_state_set_temperature(data.temperature);
+        sensor_state_set_humidity(data.humidity);
+    }
+    /* On timeout / CRC error the previous values remain in sensor_state */
+}
+
 } /* namespace sensor */
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -176,3 +188,4 @@ static sensor::DhtSensor s_dht;
 
 esp_err_t dht11_init(gpio_num_t gpio_num) { return s_dht.init(gpio_num); }
 esp_err_t dht11_read(dht11_data_t *data)  { return s_dht.read(data); }
+void      dht11_run(void)                 { s_dht.run(); }

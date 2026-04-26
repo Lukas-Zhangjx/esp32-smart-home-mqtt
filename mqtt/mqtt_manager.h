@@ -109,6 +109,13 @@ public:
     /** @brief  Returns true when the client is connected to the broker. */
     bool is_connected() const { return m_state == ConnectState::CONNECTED; }
 
+    /**
+     * @brief  Periodic run function — call from the 2000 ms task.
+     *         Reads all sensor values from sensor_state and relay_get_state(),
+     *         then publishes them.  No-op when not connected.
+     */
+    void run();
+
 private:
     esp_mqtt_client_handle_t m_handle;  /* ESP-IDF client handle */
     ConnectState             m_state;
@@ -158,6 +165,13 @@ void mqtt_manager_publish_sensors(float temp, float hum,
  * @brief  Returns true when the MQTT client is connected to the broker.
  */
 bool mqtt_manager_is_connected(void);
+
+/**
+ * @brief  Periodic run function — call from the 2000 ms task.
+ *         Reads all sensor values from sensor_state and relay_get_state(),
+ *         then publishes them.  No-op when not connected.
+ */
+void mqtt_manager_run(void);
 
 #ifdef __cplusplus
 } /* extern "C" */

@@ -1,166 +1,107 @@
+/**
+ * @file    main.c
+ * @brief   Application entry point and task scheduler
+ *
+ * Task layout (by timing requirement):
+ *
+ *   task_100ms   — fast digital I/O: obstacle, IR motion, light control timer
+ *   task_2000ms  — slow sensors: DHT11, light intensity, MQTT publish
+ *   task_startup — one-shot: starts MQTT client, then self-deletes
+ *
+ * Each task only calls the periodic run() functions of the relevant modules.
+ * No sensor logic lives in this file.
+ */
+
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
+
+/* Module headers */
 #include "wifi_sta.h"
-#include "dht11.h"
 #include "led.h"
 #include "relay.h"
-#include "obstacle.h"
 #include "light_ctrl.h"
+#include "obstacle.h"
 #include "ir_sensor.h"
+#include "dht11.h"
 #include "light_sensor.h"
-#include "esp_adc/adc_oneshot.h"
 #include "mqtt_manager.h"
-#include "sensor_state.h"
+#include "esp_adc/adc_oneshot.h"
 
 static const char *TAG = "main";
 
-/* Pin definitions */
-#define DHT11_GPIO    GPIO_NUM_19
-#define LED_GPIO      GPIO_NUM_2
-#define OBSTACLE_GPIO  GPIO_NUM_4
-#define IR_SENSOR_GPIO GPIO_NUM_23
+/* ── Pin definitions ─────────────────────────────────────────────────────── */
+#define LED_GPIO            GPIO_NUM_2
 #define RELAY_GPIO          GPIO_NUM_15
+#define OBSTACLE_GPIO       GPIO_NUM_4
+#define IR_SENSOR_GPIO      GPIO_NUM_23
+#define DHT11_GPIO          GPIO_NUM_19
 #define LIGHT_DIGITAL_GPIO  GPIO_NUM_13
 #define LIGHT_ADC_CHANNEL   ADC_CHANNEL_6   /* GPIO34 */
 
 
-/* ================================================================
- * io_task: GPIO digital input module
- *   Responsibility: read all digital switch inputs, e.g. obstacle
- *                   detection, buttons, etc.
- *   Period: 100 ms
- * ================================================================ */
-static void io_task(void *pvParameters)
+/* ════════════════════════════════════════════════════════════════════════════
+ * task_100ms — fast digital I/O (100 ms period)
+ *
+ *   obstacle_run()    read door/window sensor → sensor_state
+ *   ir_sensor_run()   read PIR → sensor_state + notify light_ctrl
+ *   light_ctrl_run()  check auto-off countdown timer
+ * ════════════════════════════════════════════════════════════════════════════ */
+static void task_100ms(void *arg)
 {
-    int last_obstacle = -1; /* previous obstacle state, -1 = uninitialized */
-    int last_ir       = -1; /* previous IR state, -1 = uninitialized */
-
-    ESP_LOGI(TAG, "io_task started");
-
-    /* --- main loop --- */
+    ESP_LOGI(TAG, "task_100ms started");
     while (1) {
-        /* Door/window sensor (obstacle module, GPIO4) */
-        int obstacle = obstacle_detected();
-        if (obstacle != last_obstacle) {
-            ESP_LOGI(TAG, "door: %s", obstacle ? "CLOSED" : "OPEN");
-            sensor_state_set_door(obstacle);
-            last_obstacle = obstacle;
-        }
-
-        /* IR detection sensor (GPIO23) */
-        int ir = ir_sensor_detected();
-        if (ir != last_ir) {
-            ESP_LOGI(TAG, "ir: %s", ir ? "DETECTED" : "clear");
-            sensor_state_set_motion(ir);
-            last_ir = ir;
-        }
-
-        /* Notify the light control module of the PIR state */
-        if (ir) {
-            light_ctrl_on_motion();
-        } else {
-            light_ctrl_on_idle();
-        }
-
-        /* Check the auto-off countdown timer */
-        light_ctrl_tick();
-
+        obstacle_run();
+        ir_sensor_run();
+        light_ctrl_run();
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
 
-/* ================================================================
- * sensor_task: analog / bus sensor module
- *   Responsibility: read all sensors and update the data cache
- *                   for use by network_task
- *   Period: 2000 ms (limited by DHT11 sampling rate)
- * ================================================================ */
-static void sensor_task(void *pvParameters)
+/* ════════════════════════════════════════════════════════════════════════════
+ * task_2000ms — slow sensors + network publish (2000 ms period)
+ *
+ *   dht11_run()         read temperature & humidity → sensor_state
+ *   light_sensor_run()  read lux → sensor_state
+ *   mqtt_manager_run()  publish all sensor_state values to MQTT broker
+ * ════════════════════════════════════════════════════════════════════════════ */
+static void task_2000ms(void *arg)
 {
-    ESP_LOGI(TAG, "sensor_task started");
-
-    /* --- main loop --- */
+    ESP_LOGI(TAG, "task_2000ms started");
     while (1) {
-        /* Read DHT11 once and forward to MQTT */
-        dht11_data_t dht = {0};
-        dht11_read(&dht);
-
-        /* Light sensor: analog + digital */
-        int raw     = light_sensor_analog();
-        int percent = light_sensor_to_percent(raw);
-        int bright  = light_sensor_digital();
-        ESP_LOGI(TAG, "temp=%.1f hum=%.1f lux=%d bright=%d",
-                 dht.temperature, dht.humidity, percent, bright);
-
-        /* Publish all sensor values over MQTT (no-op when not connected) */
-        mqtt_manager_publish_sensors(
-            dht.temperature, dht.humidity,
-            sensor_state_get_motion(), sensor_state_get_door(),
-            percent, light_ctrl_get_state());
-
+        dht11_run();
+        light_sensor_run();
+        mqtt_manager_run();
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
 
 
-/* ================================================================
- * network_task: network service module
- *   Responsibility: start and maintain all network services,
- *                   e.g. HTTP Server, MQTT, etc.
- * ================================================================ */
-static void network_task(void *pvParameters)
+/* ════════════════════════════════════════════════════════════════════════════
+ * task_startup — one-shot network initialisation
+ *
+ *   Starts the MQTT client (connects to broker asynchronously), then
+ *   self-deletes.  Runs at higher priority so it completes before periodic
+ *   tasks begin publishing.
+ * ════════════════════════════════════════════════════════════════════════════ */
+static void task_startup(void *arg)
 {
-    /* Start MQTT client (connects to broker asynchronously) */
     if (mqtt_manager_init(NULL) != ESP_OK) {
-        ESP_LOGE(TAG, "mqtt manager failed to start");
+        ESP_LOGE(TAG, "mqtt_manager_init failed");
     }
-
-    /* HTTP server is temporarily disabled — re-enable by calling http_server_start() here */
-
     vTaskDelete(NULL);
 }
 
 
-/* ================================================================
- * output_task: output module
- *   Responsibility: drive all output devices, e.g. LED, OLED, etc.
- *   Period: defined by the requirements of each output device
- * ================================================================ */
-static void output_task(void *pvParameters)
-{
-    ESP_LOGI(TAG, "output_task started");
-
-    /* Blink GPIO2 three times */
-    for (int i = 0; i < 3; i++) {
-        led_on();
-        vTaskDelay(pdMS_TO_TICKS(200));
-        led_off();
-        vTaskDelay(pdMS_TO_TICKS(200));
-    }
-
-
-    /* System running indicator: stay on */
-    led_on();
-
-    /* --- main loop --- */
-    while (1) {
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-}
-
-
-/* ================================================================
- * app_main: system entry point
- *   Responsibility: initialize system-level components and create
- *                   all framework tasks
- * ================================================================ */
+/* ════════════════════════════════════════════════════════════════════════════
+ * app_main — system entry point
+ * ════════════════════════════════════════════════════════════════════════════ */
 void app_main(void)
 {
-    /* Initialize NVS */
+    /* ── NVS (required by WiFi) ── */
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -168,10 +109,10 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
-    /* Connect to WiFi; continue running even if it times out */
+    /* ── WiFi — continues even on timeout ── */
     wifi_station_startup();
 
-    /* Hardware module initialization (done before tasks start to avoid race conditions) */
+    /* ── Hardware module initialisation ── */
     led_init(LED_GPIO);
     relay_init(RELAY_GPIO);
     light_ctrl_init();
@@ -181,9 +122,15 @@ void app_main(void)
     dht11_init(DHT11_GPIO);
     light_sensor_init(LIGHT_DIGITAL_GPIO, LIGHT_ADC_CHANNEL);
 
-    /* Create framework tasks */
-    xTaskCreate(io_task,      "io_task",      4096, NULL, 4, NULL);
-    xTaskCreate(sensor_task,  "sensor_task",  4096, NULL, 4, NULL);
-    xTaskCreate(network_task, "network_task", 4096, NULL, 5, NULL);
-    xTaskCreate(output_task,  "output_task",  4096, NULL, 3, NULL);
+    /* Startup blink: 3 × 200 ms, then LED stays on as system-running indicator */
+    for (int i = 0; i < 3; i++) {
+        led_on();  vTaskDelay(pdMS_TO_TICKS(200));
+        led_off(); vTaskDelay(pdMS_TO_TICKS(200));
+    }
+    led_on();
+
+    /* ── Create tasks ── */
+    xTaskCreate(task_startup, "task_startup",  4096, NULL, 5, NULL);
+    xTaskCreate(task_100ms,   "task_100ms",    4096, NULL, 4, NULL);
+    xTaskCreate(task_2000ms,  "task_2000ms",   4096, NULL, 3, NULL);
 }

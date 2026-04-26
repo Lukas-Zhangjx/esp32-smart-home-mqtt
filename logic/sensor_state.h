@@ -1,12 +1,13 @@
 /**
  * @file    sensor_state.h
- * @brief   Shared digital sensor state — thread-safe storage for io_task outputs
+ * @brief   Global sensor data bus — shared state between time-based tasks
  *
- * io_task writes motion and door state every 100 ms.
- * sensor_task reads them every 2 s to include in MQTT publish.
- * Atomic int operations on single-word values are safe on ESP32 without a mutex.
+ * Writers (100 ms task):  obstacle_run(), ir_sensor_run()
+ * Writers (2000 ms task): dht11_run(), light_sensor_run()
+ * Reader  (2000 ms task): mqtt_manager_run()
  *
- * Dependencies: none
+ * All fields are single-word volatile variables.  Single-word reads/writes are
+ * atomic on ESP32 (Xtensa LX6), so no mutex is required.
  */
 
 #ifndef SENSOR_STATE_H
@@ -16,29 +17,21 @@
 extern "C" {
 #endif
 
-/**
- * @brief  Update the shared motion state.
- * @param  detected  1 = motion detected, 0 = clear.
- */
-void sensor_state_set_motion(int detected);
+/* ── Writers ─────────────────────────────────────────────────────────────── */
 
-/**
- * @brief  Update the shared door state.
- * @param  closed  1 = door closed, 0 = door open.
- */
-void sensor_state_set_door(int closed);
+void sensor_state_set_motion(int detected);   /* 1 = motion, 0 = clear       */
+void sensor_state_set_door(int closed);       /* 1 = closed, 0 = open        */
+void sensor_state_set_temperature(float val); /* °C                          */
+void sensor_state_set_humidity(float val);    /* %RH                         */
+void sensor_state_set_lux(int percent);       /* 0–100                       */
 
-/**
- * @brief  Read the latest motion state.
- * @return 1 = motion detected, 0 = clear.
- */
-int sensor_state_get_motion(void);
+/* ── Readers ─────────────────────────────────────────────────────────────── */
 
-/**
- * @brief  Read the latest door state.
- * @return 1 = door closed, 0 = open.
- */
-int sensor_state_get_door(void);
+int   sensor_state_get_motion(void);
+int   sensor_state_get_door(void);
+float sensor_state_get_temperature(void);
+float sensor_state_get_humidity(void);
+int   sensor_state_get_lux(void);
 
 #ifdef __cplusplus
 }

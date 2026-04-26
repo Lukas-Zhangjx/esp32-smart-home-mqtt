@@ -20,7 +20,7 @@ namespace sensor {
 
 class ObstacleSensor {
 public:
-    ObstacleSensor() : m_gpio(GPIO_NUM_NC) {}
+    ObstacleSensor() : m_gpio(GPIO_NUM_NC), m_last(-1) {}
 
     /**
      * @brief  Configure the GPIO as pull-up input.
@@ -34,8 +34,15 @@ public:
      */
     int detected() const;
 
+    /**
+     * @brief  Periodic run function — call from the 100 ms task.
+     *         Reads the sensor; on state change logs and updates sensor_state door.
+     */
+    void run();
+
 private:
     gpio_num_t m_gpio;
+    int        m_last;  /* previous reading; -1 = not yet sampled */
 };
 
 } /* namespace sensor */
@@ -47,6 +54,7 @@ extern "C" {
 
 esp_err_t obstacle_init(gpio_num_t gpio_num);
 int       obstacle_detected(void);
+void      obstacle_run(void);
 
 #ifdef __cplusplus
 } /* extern "C" */
