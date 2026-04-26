@@ -453,6 +453,14 @@ CONFIG_ESP_WIFI_AUTH_WPA2_PSK=y
 # end of Example Configuration
 
 #
+# MQTT Configuration
+#
+CONFIG_MQTT_BROKER_URI="mqtts://989e0b4e491b4f6ab4c135931ceb0007.s1.eu.hivemq.cloud:8883"
+CONFIG_MQTT_USERNAME="smart-home"
+CONFIG_MQTT_PASSWORD="123456qweR!"
+# end of MQTT Configuration
+
+#
 # Compiler options
 #
 CONFIG_COMPILER_OPTIMIZATION_DEBUG=y

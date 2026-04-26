@@ -52,8 +52,9 @@ static EventGroupHandle_t s_wifi_event_group;
 /* The event group allows multiple bits for each event, but we only care about two events:
  * - we are connected to the AP with an IP
  * - we failed to connect after the maximum amount of retries */
-#define WIFI_CONNECTED_BIT BIT0
-#define WIFI_FAIL_BIT      BIT1
+#define WIFI_CONNECTED_BIT   BIT0
+#define WIFI_FAIL_BIT        BIT1
+#define WIFI_WAIT_TIMEOUT_MS 30000
 
 static const char *TAG = "wifi station";
 
@@ -134,7 +135,6 @@ void wifi_init_sta(void)
      * number of re-tries (WIFI_FAIL_BIT). The bits are set by event_handler() (see above) */
     /* Wait at most 30 s: 5 retries × ~5 s timeout each, with sufficient margin.
      * If the driver stalls and never fires an event, this unblocks automatically and continues. */
-    #define WIFI_WAIT_TIMEOUT_MS  30000
     EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
             WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
             pdFALSE,
