@@ -25,9 +25,9 @@
 #include "esp_err.h"
 #include <stdbool.h>
 
-/* Default public broker — change to your own broker IP for production */
+/* Broker URI comes from menuconfig (MQTT Configuration → MQTT Broker URI) */
 #ifndef MQTT_BROKER_URI
-#define MQTT_BROKER_URI "mqtt://broker.hivemq.com"
+#define MQTT_BROKER_URI CONFIG_MQTT_BROKER_URI
 #endif
 
 /* ── C++ class definition ──────────────────────────────────────────────────── */

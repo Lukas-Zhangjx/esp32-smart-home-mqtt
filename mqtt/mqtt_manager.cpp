@@ -14,6 +14,7 @@
 #include "mqtt_manager.h"
 #include "light_ctrl.h"
 #include "esp_log.h"
+#include "esp_crt_bundle.h"
 #include <cstdio>
 #include <cstring>
 
@@ -33,7 +34,13 @@ Manager::Manager(const char *broker_uri)
     /* Zero-init the config struct first, then set only what we need.
      * Required in C++ because designated initialisers cannot be nested. */
     esp_mqtt_client_config_t cfg = {};
-    cfg.broker.address.uri = broker_uri;
+    cfg.broker.address.uri                = broker_uri;
+    /* Attach the built-in CA certificate bundle so TLS (mqtts://) works
+     * with well-known brokers like HiveMQ Cloud without a custom cert file. */
+    cfg.broker.verification.crt_bundle_attach = esp_crt_bundle_attach;
+    /* Credentials from menuconfig — not hardcoded in source */
+    cfg.credentials.username                  = CONFIG_MQTT_USERNAME;
+    cfg.credentials.authentication.password   = CONFIG_MQTT_PASSWORD;
 
     m_handle = esp_mqtt_client_init(&cfg);
     if (m_handle == nullptr) {

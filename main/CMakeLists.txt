@@ -26,4 +26,5 @@ idf_component_register(
         esp_timer
         esp_adc
         mqtt
+        esp-tls
 )
