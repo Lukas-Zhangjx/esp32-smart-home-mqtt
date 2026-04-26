@@ -1,6 +1,6 @@
 /**
  * @file    relay.h
- * @brief   Relay / GPIO output control module public interface
+ * @brief   Relay / GPIO output control — C++ class + C wrapper interface
  *
  * Push-pull output mode, active high:
  *   state = 1 → GPIO high → load conducting
@@ -10,38 +10,52 @@
 #ifndef RELAY_H
 #define RELAY_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include "esp_err.h"
 #include "driver/gpio.h"
 
-/**
- * @brief  Initialize the relay GPIO; configure as push-pull output, off by default
- *
- * @param gpio_num  GPIO number connected to the relay/LED
- * @return ESP_OK / ESP_FAIL
- */
+/* ── C++ class definition ──────────────────────────────────────────────────── */
+#ifdef __cplusplus
+
+namespace gpio {
+
+class Relay {
+public:
+    Relay() : m_gpio(GPIO_NUM_NC), m_state(0) {}
+
+    /**
+     * @brief  Configure the GPIO as push-pull output; relay starts off.
+     * @return ESP_OK on success, ESP_FAIL on failure.
+     */
+    esp_err_t init(gpio_num_t gpio_num);
+
+    /**
+     * @brief  Set the relay state.
+     * @param  on  1 = on (conducting), 0 = off (open).
+     * @return The actual state after being set.
+     */
+    int set(int on);
+
+    /** @brief  Return current state: 1 = on, 0 = off. */
+    int state() const { return m_state; }
+
+private:
+    gpio_num_t m_gpio;
+    int        m_state;
+};
+
+} /* namespace gpio */
+
+extern "C" {
+#endif /* __cplusplus */
+
+/* ── C interface (callable from main.c) ────────────────────────────────────── */
+
 esp_err_t relay_init(gpio_num_t gpio_num);
-
-/**
- * @brief  Set the relay state
- *
- * @param state  1 = on (conducting), 0 = off (open)
- * @return       The actual state after being set
- */
-int relay_set(int state);
-
-/**
- * @brief  Get the current relay state
- *
- * @return 1 = on (conducting), 0 = off (open)
- */
-int relay_get_state(void);
+int       relay_set(int state);
+int       relay_get_state(void);
 
 #ifdef __cplusplus
-}
+} /* extern "C" */
 #endif
 
 #endif /* RELAY_H */

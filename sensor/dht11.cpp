@@ -1,6 +1,6 @@
 /**
- * @file    dht11.c
- * @brief   DHT11 temperature and humidity sensor driver implementation
+ * @file    dht11.cpp
+ * @brief   DHT11 temperature and humidity sensor — sensor::DhtSensor class implementation + C wrappers
  *
  * Single-wire timing (refer to the DHT11 datasheet):
  *
@@ -31,25 +31,22 @@
 
 static const char *TAG = "dht11";
 
-/* Stores the GPIO number configured at initialization */
-static gpio_num_t s_gpio_num = GPIO_NUM_NC;
-
 /* Timeout for waiting on a bus level change (μs).
- * DHT11 response signal is at most 80 μs; set to 200 μs for sufficient margin. */
+ * DHT11 response signal is at most 80 μs; 200 μs gives sufficient margin. */
 #define DHT11_TIMEOUT_US  200
 
+/* ════════════════════════════════════════════════════════════════════════════
+ * sensor::DhtSensor implementation
+ * ════════════════════════════════════════════════════════════════════════════ */
 
-/**
- * @brief  Wait for the DATA line to reach the specified level; returns elapsed
- *         time in μs, or -1 on timeout.
- *
- * @param level  Expected level (0 or 1)
- * @return Elapsed time (μs), or -1 on timeout
- */
-static int wait_for_level(int level)
+namespace sensor {
+
+/* ── Private helper ──────────────────────────────────────────────────────── */
+
+int DhtSensor::wait_for_level(int level) const
 {
     int elapsed = 0;
-    while (gpio_get_level(s_gpio_num) != level) {
+    while (gpio_get_level(m_gpio) != level) {
         if (elapsed >= DHT11_TIMEOUT_US) {
             return -1; /* timeout */
         }
@@ -59,22 +56,17 @@ static int wait_for_level(int level)
     return elapsed;
 }
 
+/* ── init ────────────────────────────────────────────────────────────────── */
 
-/**
- * @brief  Initialize DHT11; configure the DATA pin as open-drain output
- *
- * @param gpio_num  DATA pin number
- * @return ESP_OK / ESP_FAIL
- */
-esp_err_t dht11_init(gpio_num_t gpio_num)
+esp_err_t DhtSensor::init(gpio_num_t gpio_num)
 {
-    s_gpio_num = gpio_num;
+    m_gpio = gpio_num;
 
-    /* Configure as open-drain: can drive low; when released, pull-up resistor pulls high */
+    /* Open-drain: can drive low; pull-up holds high when released */
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << gpio_num),
-        .mode         = GPIO_MODE_INPUT_OUTPUT_OD, /* open-drain, readable and writable */
-        .pull_up_en   = GPIO_PULLUP_ENABLE,        /* enable internal pull-up */
+        .mode         = GPIO_MODE_INPUT_OUTPUT_OD,
+        .pull_up_en   = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type    = GPIO_INTR_DISABLE,
     };
@@ -85,105 +77,102 @@ esp_err_t dht11_init(gpio_num_t gpio_num)
         return ESP_FAIL;
     }
 
-    /* Pull the bus high after initialization and wait for DHT11 to stabilize (needs 1 s after power-on) */
-    gpio_set_level(s_gpio_num, 1);
+    /* Pull bus high and wait for DHT11 to stabilise after power-on (needs ~1 s) */
+    gpio_set_level(m_gpio, 1);
     vTaskDelay(pdMS_TO_TICKS(1000));
 
     ESP_LOGI(TAG, "dht11 init ok, gpio=%d", gpio_num);
     return ESP_OK;
 }
 
+/* ── read ────────────────────────────────────────────────────────────────── */
 
-/**
- * @brief  Read one set of temperature and humidity data from DHT11
- *
- * @param data  Output result
- * @return ESP_OK / ESP_ERR_TIMEOUT / ESP_ERR_INVALID_CRC
- */
-esp_err_t dht11_read(dht11_data_t *data)
+esp_err_t DhtSensor::read(dht11_data_t *data)
 {
-    uint8_t raw[5] = {0}; /* 40 bits = 5 bytes of raw data */
+    uint8_t raw[5] = {0}; /* 40 bits = 5 bytes */
 
     /* ---- 1. Host sends start signal ---- */
-    /* Pull low >= 18 ms to notify DHT11 to begin communication */
-    gpio_set_level(s_gpio_num, 0);
-    vTaskDelay(pdMS_TO_TICKS(20)); /* 20 ms, exceeds the minimum 18 ms requirement */
+    gpio_set_level(m_gpio, 0);
+    vTaskDelay(pdMS_TO_TICKS(20)); /* 20 ms — satisfies the >= 18 ms requirement */
 
     /* ---- 2. Disable interrupts before the timing-critical section ---- */
     portDISABLE_INTERRUPTS();
 
-    /* Release the bus: switch to pure input mode to completely remove the output driver;
-     * the pull-up resistor pulls the line high.
-     * open-drain set(1) may not release cleanly in some cases; pure input is most reliable. */
-    gpio_set_direction(s_gpio_num, GPIO_MODE_INPUT);
+    /* Release the bus: switch to pure input so the pull-up takes effect cleanly */
+    gpio_set_direction(m_gpio, GPIO_MODE_INPUT);
     ets_delay_us(30);
 
     /* ---- 3. Wait for DHT11 response ---- */
-    /* Response: first pulled low for 80 μs */
     if (wait_for_level(0) < 0) {
         portENABLE_INTERRUPTS();
-        gpio_set_direction(s_gpio_num, GPIO_MODE_INPUT_OUTPUT_OD);
-        gpio_set_level(s_gpio_num, 1);
+        gpio_set_direction(m_gpio, GPIO_MODE_INPUT_OUTPUT_OD);
+        gpio_set_level(m_gpio, 1);
         ESP_LOGE(TAG, "timeout waiting for DHT11 response low");
         return ESP_ERR_TIMEOUT;
     }
-    /* Then pulled high for 80 μs */
     if (wait_for_level(1) < 0) {
         portENABLE_INTERRUPTS();
-        gpio_set_direction(s_gpio_num, GPIO_MODE_INPUT_OUTPUT_OD);
-        gpio_set_level(s_gpio_num, 1);
+        gpio_set_direction(m_gpio, GPIO_MODE_INPUT_OUTPUT_OD);
+        gpio_set_level(m_gpio, 1);
         ESP_LOGE(TAG, "timeout waiting for DHT11 response high");
         return ESP_ERR_TIMEOUT;
     }
 
-    /* ---- 3. Read 40 bits of data ---- */
+    /* ---- 4. Read 40 bits of data ---- */
     for (int i = 0; i < 40; i++) {
-        /* Each bit starts with 50 μs low level */
+        /* Each bit starts with a 50 μs low level */
         if (wait_for_level(0) < 0) {
             portENABLE_INTERRUPTS();
-            gpio_set_direction(s_gpio_num, GPIO_MODE_INPUT_OUTPUT_OD);
-            gpio_set_level(s_gpio_num, 1);
+            gpio_set_direction(m_gpio, GPIO_MODE_INPUT_OUTPUT_OD);
+            gpio_set_level(m_gpio, 1);
             ESP_LOGE(TAG, "timeout at bit %d low", i);
             return ESP_ERR_TIMEOUT;
         }
-        /* High-level duration determines the bit value:
-         *   < 40 μs  → bit 0
-         *   >= 40 μs → bit 1 */
         if (wait_for_level(1) < 0) {
             portENABLE_INTERRUPTS();
-            gpio_set_direction(s_gpio_num, GPIO_MODE_INPUT_OUTPUT_OD);
-            gpio_set_level(s_gpio_num, 1);
+            gpio_set_direction(m_gpio, GPIO_MODE_INPUT_OUTPUT_OD);
+            gpio_set_level(m_gpio, 1);
             ESP_LOGE(TAG, "timeout at bit %d high start", i);
             return ESP_ERR_TIMEOUT;
         }
 
-        ets_delay_us(40); /* wait 40 μs, then sample */
+        ets_delay_us(40); /* sample after 40 μs */
 
-        /* If the high level is still present → bit 1; if it has ended → bit 0 */
+        /* HIGH level still present → bit 1; line has gone low → bit 0 */
         raw[i / 8] <<= 1;
-        if (gpio_get_level(s_gpio_num) == 1) {
+        if (gpio_get_level(m_gpio) == 1) {
             raw[i / 8] |= 1;
         }
     }
 
     portENABLE_INTERRUPTS();
 
-    /* Restore open-drain output, pull bus high, ready for next communication */
-    gpio_set_direction(s_gpio_num, GPIO_MODE_INPUT_OUTPUT_OD);
-    gpio_set_level(s_gpio_num, 1);
+    /* Restore open-drain output, pull bus high ready for next communication */
+    gpio_set_direction(m_gpio, GPIO_MODE_INPUT_OUTPUT_OD);
+    gpio_set_level(m_gpio, 1);
 
-    /* ---- 4. Checksum verification ---- */
+    /* ---- 5. Checksum verification ---- */
     uint8_t checksum = raw[0] + raw[1] + raw[2] + raw[3];
     if (checksum != raw[4]) {
         ESP_LOGE(TAG, "checksum error: calc=0x%02X recv=0x%02X", checksum, raw[4]);
         return ESP_ERR_INVALID_CRC;
     }
 
-    /* ---- 5. Parse data ---- */
-    /* DHT11 fractional parts (raw[1], raw[3]) are always 0; use integer parts directly */
-    data->humidity    = (float)raw[0];
-    data->temperature = (float)raw[2];
+    /* ---- 6. Parse data (DHT11 fractional parts raw[1] and raw[3] are always 0) ---- */
+    data->humidity    = static_cast<float>(raw[0]);
+    data->temperature = static_cast<float>(raw[2]);
 
     ESP_LOGI(TAG, "read ok: temp=%.1f humi=%.1f", data->temperature, data->humidity);
     return ESP_OK;
 }
+
+} /* namespace sensor */
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * C wrapper — file-scoped singleton
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+static sensor::DhtSensor s_dht;
+
+esp_err_t dht11_init(gpio_num_t gpio_num) { return s_dht.init(gpio_num); }
+esp_err_t dht11_read(dht11_data_t *data)  { return s_dht.read(data); }

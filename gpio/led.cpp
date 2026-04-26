@@ -1,9 +1,9 @@
 /**
- * @file    led.c
- * @brief   LED GPIO control module implementation
+ * @file    led.cpp
+ * @brief   LED GPIO control — gpio::Led class implementation + C wrappers
  *
  * Push-pull output mode: GPIO high = LED on, GPIO low = LED off.
- * The current state is maintained internally to avoid reading the GPIO register every time.
+ * The current state is cached in m_state to avoid reading the GPIO register.
  */
 
 #include "led.h"
@@ -11,24 +11,17 @@
 
 static const char *TAG = "led";
 
-/* Stores the GPIO number configured at initialization */
-static gpio_num_t s_gpio_num = GPIO_NUM_NC;
+/* ════════════════════════════════════════════════════════════════════════════
+ * gpio::Led implementation
+ * ════════════════════════════════════════════════════════════════════════════ */
 
-/* Cached current LED state: 1 = on, 0 = off */
-static int s_state = 0;
+namespace gpio {
 
-
-/**
- * @brief  Initialize the LED GPIO; configure as push-pull output, off by default
- *
- * @param gpio_num  GPIO number connected to the LED
- * @return ESP_OK / ESP_FAIL
- */
-esp_err_t led_init(gpio_num_t gpio_num)
+esp_err_t Led::init(gpio_num_t gpio_num)
 {
-    s_gpio_num = gpio_num;
+    m_gpio  = gpio_num;
+    m_state = 0;
 
-    /* Configure as push-pull output; no pull-up/pull-down needed */
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << gpio_num),
         .mode         = GPIO_MODE_OUTPUT,
@@ -43,53 +36,40 @@ esp_err_t led_init(gpio_num_t gpio_num)
         return ESP_FAIL;
     }
 
-    /* Default to off after initialization */
-    gpio_set_level(s_gpio_num, 0);
-    s_state = 0;
-
+    gpio_set_level(m_gpio, 0);
     ESP_LOGI(TAG, "led init ok, gpio=%d", gpio_num);
     return ESP_OK;
 }
 
-/**
- * @brief  Turn the LED on
- */
-void led_on(void)
+void Led::on()
 {
-    gpio_set_level(s_gpio_num, 1);
-    s_state = 1;
+    gpio_set_level(m_gpio, 1);
+    m_state = 1;
     ESP_LOGD(TAG, "led on");
 }
 
-/**
- * @brief  Turn the LED off
- */
-void led_off(void)
+void Led::off()
 {
-    gpio_set_level(s_gpio_num, 0);
-    s_state = 0;
+    gpio_set_level(m_gpio, 0);
+    m_state = 0;
     ESP_LOGD(TAG, "led off");
 }
 
-/**
- * @brief  Toggle the LED state
- */
-void led_toggle(void)
+void Led::toggle()
 {
-    /* Toggle based on the cached state to avoid reading the GPIO register */
-    if (s_state) {
-        led_off();
-    } else {
-        led_on();
-    }
+    if (m_state) { off(); } else { on(); }
 }
 
-/**
- * @brief  Get the current LED state
- *
- * @return 1 = on, 0 = off
- */
-int led_get_state(void)
-{
-    return s_state;
-}
+} /* namespace gpio */
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * C wrapper — file-scoped singleton
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+static gpio::Led s_led;
+
+esp_err_t led_init(gpio_num_t gpio_num) { return s_led.init(gpio_num); }
+void      led_on(void)                  { s_led.on(); }
+void      led_off(void)                 { s_led.off(); }
+void      led_toggle(void)              { s_led.toggle(); }
+int       led_get_state(void)           { return s_led.state(); }

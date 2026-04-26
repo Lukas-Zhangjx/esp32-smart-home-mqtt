@@ -1,6 +1,6 @@
 /**
- * @file    light_ctrl.c
- * @brief   Automatic light control logic module implementation
+ * @file    light_ctrl.cpp
+ * @brief   Automatic light control logic — logic::LightCtrl class implementation + C wrappers
  *
  * State machine:
  *
@@ -32,117 +32,96 @@ static const char *TAG = "light_ctrl";
 /* Auto-off timeout: 10 seconds */
 #define AUTO_TIMEOUT_US  (10LL * 1000 * 1000)
 
-/* Manual on state: 1 = manually always on, 0 = not manually on */
-static int s_manual_on = 0;
+/* ════════════════════════════════════════════════════════════════════════════
+ * logic::LightCtrl implementation
+ * ════════════════════════════════════════════════════════════════════════════ */
 
-/* Manual off flag: set to 1 when the user explicitly turns off the light;
- * cleared when PIR goes idle; suppresses auto-on in the meantime */
-static int s_manual_off = 0;
+namespace logic {
 
-/* Whether auto mode is active */
-static int s_auto_active = 0;
-
-/* Timestamp of the last detected motion (microseconds) */
-static int64_t s_last_motion_us = 0;
-
-
-/**
- * @brief  Initialize the light control module; light off by default
- */
-void light_ctrl_init(void)
+void LightCtrl::init()
 {
-    s_manual_on      = 0;
-    s_manual_off     = 0;
-    s_auto_active    = 0;
-    s_last_motion_us = 0;
+    m_manual_on      = 0;
+    m_manual_off     = 0;
+    m_auto_active    = 0;
+    m_last_motion_us = 0;
     relay_set(0);
     ESP_LOGI(TAG, "light ctrl init ok");
 }
 
-
-/**
- * @brief  Notify the control module that human motion has been detected
- */
-void light_ctrl_on_motion(void)
+void LightCtrl::on_motion()
 {
     /* While the user has manually turned off the light, suppress auto-trigger
      * until PIR goes idle */
-    if (s_manual_off) return;
+    if (m_manual_off) return;
 
-    s_last_motion_us = esp_timer_get_time();
+    m_last_motion_us = esp_timer_get_time();
 
-    if (!s_auto_active) {
-        s_auto_active = 1;
+    if (!m_auto_active) {
+        m_auto_active = 1;
         relay_set(1);
         ESP_LOGI(TAG, "motion detected, light ON (auto 10s)");
     } else {
-        /* Already on; just reset the timer */
+        /* Already on — just reset the timer */
         ESP_LOGD(TAG, "motion: timer reset");
     }
 }
 
-
-/**
- * @brief  Notify the control module that PIR has gone idle (no person present)
- *
- * Used to clear the manual-off suppression so that the next person entering
- * can trigger auto-on again.
- */
-void light_ctrl_on_idle(void)
+void LightCtrl::on_idle()
 {
-    if (s_manual_off) {
-        s_manual_off = 0;
+    if (m_manual_off) {
+        m_manual_off = 0;
         ESP_LOGI(TAG, "pir idle, manual-off suppression cleared");
     }
 }
 
-
-/**
- * @brief  Manually set the light state (from the web switch)
- */
-void light_ctrl_set_manual(int on)
+void LightCtrl::set_manual(int on)
 {
-    s_manual_on = on;
+    m_manual_on = on;
 
     if (on) {
-        /* Manual on: always on, clear all suppression and auto timer */
-        s_manual_off  = 0;
-        s_auto_active = 0;
+        /* Manual on: always on; clear suppression and auto timer */
+        m_manual_off  = 0;
+        m_auto_active = 0;
         relay_set(1);
         ESP_LOGI(TAG, "manual ON");
     } else {
-        /* Manual off: turn off immediately, suppress auto-on until PIR goes idle */
-        s_manual_off  = 1;
-        s_auto_active = 0;
+        /* Manual off: turn off immediately; suppress auto-on until PIR goes idle */
+        m_manual_off  = 1;
+        m_auto_active = 0;
         relay_set(0);
         ESP_LOGI(TAG, "manual OFF");
     }
 }
 
-
-/**
- * @brief  Periodically check the auto-off countdown timer
- *
- * Should be called every io_task loop iteration (100 ms).
- */
-void light_ctrl_tick(void)
+void LightCtrl::tick()
 {
-    /* No check needed when manually always on or when auto mode is not active */
-    if (s_manual_on || !s_auto_active) return;
+    /* Nothing to do if manually always on or auto mode is not running */
+    if (m_manual_on || !m_auto_active) return;
 
-    int64_t elapsed = esp_timer_get_time() - s_last_motion_us;
+    int64_t elapsed = esp_timer_get_time() - m_last_motion_us;
     if (elapsed >= AUTO_TIMEOUT_US) {
-        s_auto_active = 0;
+        m_auto_active = 0;
         relay_set(0);
         ESP_LOGI(TAG, "auto timeout, light OFF");
     }
 }
 
-
-/**
- * @brief  Get the current actual light state
- */
-int light_ctrl_get_state(void)
+int LightCtrl::get_state() const
 {
     return relay_get_state();
 }
+
+} /* namespace logic */
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * C wrapper — file-scoped singleton
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+static logic::LightCtrl s_ctrl;
+
+void light_ctrl_init(void)           { s_ctrl.init(); }
+void light_ctrl_on_motion(void)      { s_ctrl.on_motion(); }
+void light_ctrl_on_idle(void)        { s_ctrl.on_idle(); }
+void light_ctrl_set_manual(int on)   { s_ctrl.set_manual(on); }
+void light_ctrl_tick(void)           { s_ctrl.tick(); }
+int  light_ctrl_get_state(void)      { return s_ctrl.get_state(); }

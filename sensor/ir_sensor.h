@@ -1,40 +1,55 @@
 /**
  * @file    ir_sensor.h
- * @brief   IR detection module public interface (digital output type)
+ * @brief   HC-SR501 PIR motion sensor — C++ class + C wrapper interface
  *
- * Suitable for IR sensor modules with digital output (e.g. FC-51, TCRT5000, etc.).
- * Module output levels:
- *   Target detected (blocked/reflected) → OUT = LOW  (0)
- *   No target                           → OUT = HIGH (1)
+ * Digital output, active high:
+ *   Motion detected → OUT = HIGH (1)
+ *   No motion       → OUT = LOW  (0)
  */
 
 #ifndef IR_SENSOR_H
 #define IR_SENSOR_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include "esp_err.h"
 #include "driver/gpio.h"
 
-/**
- * @brief  Initialize the IR sensor; configure GPIO as pull-up input
- *
- * @param gpio_num  GPIO number connected to the OUT pin
- * @return ESP_OK / ESP_FAIL
- */
-esp_err_t ir_sensor_init(gpio_num_t gpio_num);
+/* ── C++ class definition ──────────────────────────────────────────────────── */
+#ifdef __cplusplus
 
-/**
- * @brief  Read the current detection state
- *
- * @return 1 = target detected, 0 = no target
- */
-int ir_sensor_detected(void);
+namespace sensor {
+
+class IrSensor {
+public:
+    IrSensor() : m_gpio(GPIO_NUM_NC) {}
+
+    /**
+     * @brief  Configure the GPIO as floating input (HC-SR501 drives the line actively).
+     * @return ESP_OK on success, ESP_FAIL on failure.
+     */
+    esp_err_t init(gpio_num_t gpio_num);
+
+    /**
+     * @brief  Read the current detection state.
+     * @return 1 = motion detected (OUT=HIGH), 0 = no motion.
+     */
+    int detected() const;
+
+private:
+    gpio_num_t m_gpio;
+};
+
+} /* namespace sensor */
+
+extern "C" {
+#endif /* __cplusplus */
+
+/* ── C interface (callable from main.c) ────────────────────────────────────── */
+
+esp_err_t ir_sensor_init(gpio_num_t gpio_num);
+int       ir_sensor_detected(void);
 
 #ifdef __cplusplus
-}
+} /* extern "C" */
 #endif
 
 #endif /* IR_SENSOR_H */
