@@ -13,6 +13,7 @@
 #include "light_sensor.h"
 #include "esp_adc/adc_oneshot.h"
 #include "mqtt_manager.h"
+#include "sensor_state.h"
 
 static const char *TAG = "main";
 
@@ -45,6 +46,7 @@ static void io_task(void *pvParameters)
         int obstacle = obstacle_detected();
         if (obstacle != last_obstacle) {
             ESP_LOGI(TAG, "door: %s", obstacle ? "CLOSED" : "OPEN");
+            sensor_state_set_door(obstacle);
             last_obstacle = obstacle;
         }
 
@@ -52,6 +54,7 @@ static void io_task(void *pvParameters)
         int ir = ir_sensor_detected();
         if (ir != last_ir) {
             ESP_LOGI(TAG, "ir: %s", ir ? "DETECTED" : "clear");
+            sensor_state_set_motion(ir);
             last_ir = ir;
         }
 
@@ -96,7 +99,7 @@ static void sensor_task(void *pvParameters)
         /* Publish all sensor values over MQTT (no-op when not connected) */
         mqtt_manager_publish_sensors(
             dht.temperature, dht.humidity,
-            0, 0,   /* TODO: share ir/obstacle state from io_task */
+            sensor_state_get_motion(), sensor_state_get_door(),
             percent, light_ctrl_get_state());
 
         vTaskDelay(pdMS_TO_TICKS(2000));

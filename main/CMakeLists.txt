@@ -9,6 +9,7 @@ idf_component_register(
         "../gpio/led.cpp"
         "../gpio/relay.cpp"
         "../logic/light_ctrl.cpp"
+        "../logic/sensor_state.cpp"
         "../mqtt/mqtt_manager.cpp"
     INCLUDE_DIRS
         "."
