@@ -2,7 +2,6 @@ idf_component_register(
     SRCS
         "main.c"
         "../wifi/wifi_sta.cpp"
-        "../http/http_server.cpp"
         "../sensor/dht11.cpp"
         "../sensor/obstacle.cpp"
         "../sensor/ir_sensor.cpp"
@@ -14,19 +13,15 @@ idf_component_register(
     INCLUDE_DIRS
         "."
         "../wifi"
-        "../http"
         "../sensor"
         "../gpio"
         "../logic"
         "../mqtt"
-    EMBED_FILES
-        "web/index.html"
     REQUIRES
         nvs_flash
         esp_netif
         esp_wifi
         esp_event
-        esp_http_server
         esp_driver_gpio
         esp_timer
         esp_adc

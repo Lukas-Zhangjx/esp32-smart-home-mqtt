@@ -4,7 +4,6 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "wifi_sta.h"
-#include "http_server.h"
 #include "dht11.h"
 #include "led.h"
 #include "relay.h"
@@ -42,11 +41,10 @@ static void io_task(void *pvParameters)
 
     /* --- main loop --- */
     while (1) {
-        /* Door/window sensor (obstacle module, GPIO22) */
+        /* Door/window sensor (obstacle module, GPIO4) */
         int obstacle = obstacle_detected();
         if (obstacle != last_obstacle) {
             ESP_LOGI(TAG, "door: %s", obstacle ? "CLOSED" : "OPEN");
-            http_server_update_obstacle(obstacle);
             last_obstacle = obstacle;
         }
 
@@ -54,7 +52,6 @@ static void io_task(void *pvParameters)
         int ir = ir_sensor_detected();
         if (ir != last_ir) {
             ESP_LOGI(TAG, "ir: %s", ir ? "DETECTED" : "clear");
-            http_server_update_ir(ir);
             last_ir = ir;
         }
 
@@ -85,23 +82,21 @@ static void sensor_task(void *pvParameters)
 
     /* --- main loop --- */
     while (1) {
-        /* Read DHT11 once; forward to both HTTP cache and MQTT */
+        /* Read DHT11 once and forward to MQTT */
         dht11_data_t dht = {0};
         dht11_read(&dht);
-        http_server_update_sensor(dht);
 
         /* Light sensor: analog + digital */
         int raw     = light_sensor_analog();
         int percent = light_sensor_to_percent(raw);
         int bright  = light_sensor_digital();
-        http_server_update_light(percent, raw, bright);
+        ESP_LOGI(TAG, "temp=%.1f hum=%.1f lux=%d bright=%d",
+                 dht.temperature, dht.humidity, percent, bright);
 
         /* Publish all sensor values over MQTT (no-op when not connected) */
         mqtt_manager_publish_sensors(
             dht.temperature, dht.humidity,
-            /* motion and door states come from the io_task caches via http_server;
-             * read them back via light_ctrl for relay state */
-            0, 0,  /* TODO: expose ir/obstacle state from io_task */
+            0, 0,   /* TODO: share ir/obstacle state from io_task */
             percent, light_ctrl_get_state());
 
         vTaskDelay(pdMS_TO_TICKS(2000));
@@ -116,17 +111,13 @@ static void sensor_task(void *pvParameters)
  * ================================================================ */
 static void network_task(void *pvParameters)
 {
-    /* Start HTTP server */
-    if (http_server_start() != ESP_OK) {
-        ESP_LOGE(TAG, "http server failed to start");
-    }
-
     /* Start MQTT client (connects to broker asynchronously) */
     if (mqtt_manager_init(NULL) != ESP_OK) {
         ESP_LOGE(TAG, "mqtt manager failed to start");
     }
 
-    /* Both services run on their own internal tasks; nothing left to do here */
+    /* HTTP server is temporarily disabled — re-enable by calling http_server_start() here */
+
     vTaskDelete(NULL);
 }
 
